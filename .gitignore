@@ -1,0 +1,85 @@
+# Configuration files
+config.inc.php
+.env
+
+# Database files
+*.sql
+*.sqlite
+*.db
+
+# Files directory (user uploads)
+files/
+
+# Cache and temporary files
+cache/
+*.tmp
+*.cache
+
+# Log files
+*.log
+
+# Public files (uploaded images, etc)
+public/journals/
+public/site/
+
+# Plugin files that might contain sensitive data
+plugins/generic/*/config.inc.php
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# Node modules and npm
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Composer dependencies
+/vendor/
+
+# Build and compiled files
+*.min.js
+*.min.css
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+desktop.ini
+
+# Session files
+sessions/
+
+# Temporary upload directory
+/tmp/
+
+# Error logs
+error_log
+php_errors.log
+
+# Environment specific files
+.htaccess.local
+
+# Sensitive information
+*.pem
+*.key
+*.crt
+
+# Development and testing
+/tests/results/
+/tests/coverage/
+
+# Documentation build files
+/docs/_build/
