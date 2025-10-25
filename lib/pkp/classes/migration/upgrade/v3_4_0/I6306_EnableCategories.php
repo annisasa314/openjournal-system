@@ -43,31 +43,47 @@ abstract class I6306_EnableCategories extends Migration
             throw new \RuntimeException("Invalid context column: {$contextIdColumn}");
         }
 
-        // Ambil semua ID context yang ada
-        $contextIds = DB::table($contextTable)->pluck($contextIdColumn);
-
-        if ($contextIds->isEmpty()) {
-            return;
+        // Validasi tambahan untuk context settings table
+        $allowedSettingsTables = ['journal_settings', 'press_settings', 'context_settings'];
+        if (!in_array($contextSettingsTable, $allowedSettingsTables, true)) {
+            throw new \RuntimeException("Invalid context settings table: {$contextSettingsTable}");
         }
 
-        // Siapkan data untuk diinsert secara massal
-        $insertData = $contextIds->map(fn ($id) => [
-            $contextIdColumn => $id,
-            'setting_name' => 'submitWithCategories',
-            'setting_value' => '1',
-        ])->toArray();
+        // Ambil semua ID context yang ada dengan chunk untuk menghindari memory issue
+        DB::table($contextTable)
+            ->select($contextIdColumn)
+            ->chunkById(100, function ($contexts) use ($contextSettingsTable, $contextIdColumn) {
+                $insertData = [];
+                
+                foreach ($contexts as $context) {
+                    $insertData[] = [
+                        $contextIdColumn => $context->{$contextIdColumn},
+                        'setting_name' => 'submitWithCategories',
+                        'setting_value' => '1',
+                    ];
+                }
 
-        // Gunakan Query Builder yang aman (parameter binding)
-        DB::table($contextSettingsTable)->insert($insertData);
+                // Insert data dengan batch untuk efisiensi
+                if (!empty($insertData)) {
+                    DB::table($contextSettingsTable)->insert($insertData);
+                }
+            }, $contextIdColumn);
     }
 
     public function down(): void
     {
         $contextSettingsTable = $this->getContextSettingsTable();
+        
+        // Validasi nama tabel settings
+        $allowedSettingsTables = ['journal_settings', 'press_settings', 'context_settings'];
+        if (!in_array($contextSettingsTable, $allowedSettingsTables, true)) {
+            throw new \RuntimeException("Invalid context settings table: {$contextSettingsTable}");
+        }
 
-        // Hapus setting yang ditambahkan
+        // Hapus setting yang ditambahkan - sudah aman dengan Query Builder
         DB::table($contextSettingsTable)
             ->where('setting_name', 'submitWithCategories')
+            ->where('setting_value', '1')
             ->delete();
     }
 }
