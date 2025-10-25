@@ -186,12 +186,30 @@ class LanguageGridHandler extends GridHandler
 
         if (Locale::isLocaleValid($locale) && array_key_exists($locale, $availableLocales)) {
             // Make sure at least the primary locale is chosen as available
-            foreach (['supportedLocales', 'supportedSubmissionLocales', 'supportedFormLocales'] as $name) {
-                $$name = $context->getData($name);
-                if (!in_array($locale, $$name)) {
-                    array_push($$name, $locale);
-                    $context->updateSetting($name, $$name);
-                }
+            $supportedLocales = $context->getData('supportedLocales');
+            $supportedSubmissionLocales = $context->getData('supportedSubmissionLocales');
+            $supportedFormLocales = $context->getData('supportedFormLocales');
+            
+            $settingsToUpdate = [];
+            
+            if (!in_array($locale, $supportedLocales)) {
+                $supportedLocales[] = $locale;
+                $settingsToUpdate['supportedLocales'] = $supportedLocales;
+            }
+            
+            if (!in_array($locale, $supportedSubmissionLocales)) {
+                $supportedSubmissionLocales[] = $locale;
+                $settingsToUpdate['supportedSubmissionLocales'] = $supportedSubmissionLocales;
+            }
+            
+            if (!in_array($locale, $supportedFormLocales)) {
+                $supportedFormLocales[] = $locale;
+                $settingsToUpdate['supportedFormLocales'] = $supportedFormLocales;
+            }
+            
+            // Update all settings that need to be changed
+            foreach ($settingsToUpdate as $name => $value) {
+                $context->updateSetting($name, $value);
             }
 
             $context->setPrimaryLocale($locale);

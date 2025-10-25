@@ -1,77 +1,4 @@
 <?php
-/**
- * @file classes/filter/Filter.php
- *
- * Copyright (c) 2014-2021 Simon Fraser University
- * Copyright (c) 2000-2021 John Willinsky
- * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
- *
- * @class Filter
- *
- * @ingroup filter
- *
- * @brief Class that provides the basic template for a filter. Filters are
- *  generic data processors that take in a well-specified data type
- *  and return another well-specified data type.
- *
- *  Filters enable us to re-use data transformations between applications.
- *  Generic filter implementations can sequence, (de-)multiplex or iterate
- *  over other filters. Thereby filters can be nested and combined in many
- *  different ways to form complex and easy-to-customize data processing
- *  networks or pipelines.
- *
- *  NB: This also means that filters only make sense if they accept and
- *  return standardized formats that are understood by other filters. Otherwise
- *  the extra implementation effort for a filter won't result in improved code
- *  re-use.
- *
- *  Objects from different applications (e.g. Papers and Articles) can first be
- *  transformed by an application specific filter into a common format and then
- *  be processed by application agnostic import/export filters or vice versa.
- *  Filters can be used to pre-process data before it is indexed for search.
- *  They also provide a framework to customize the processing applied in citation
- *  parsing and lookup (i.e. which parsers and lookup sources should be applied).
- *
- *  Filters can be used stand-alone outside PKP applications.
- *
- *  The following is a complete list of all use-cases that have been identified
- *  for filters:
- *  1) Decode/Encode
- *  * import/export: transform application objects (e.g. an Article object)
- *    into structured (rich) data formats (e.g. XML, OpenURL KEV, CSV) or
- *    vice versa.
- *  * parse: transform unstructured clob/blob data (e.g. a Word Document)
- *    into application objects (e.g. an Article plus Citation objects) or
- *    into structured data formats (e.g. XML).
- *  * render: transform application objects or structured clob/blob data into
- *    an unstructured document (e.g. PDF, HTML, Word Document).
- *
- *  2) Normalize
- *  * lookup: compare the data of a given entity (e.g. a bibliographic
- *    reference) with data from other sources (e.g. Crossref) and use this
- *    to normalize data or improve data quality.
- *  * harvest: cleanse and normalize incoming meta-data
- *
- *  3) Map
- *  * cross-walk: transform one meta-data format into another. Meta-data
- *    can be represented as structured clob/blob data (e.g. XML) or as
- *    application objects (i.e. a MetadataRecord instance).
- *  * meta-data extraction: retrieve meta-data from OO entities
- *    (e.g. an Article) into a standardized meta-data record (e.g. NLM
- *    element-citation).
- *  * meta-data injection: inject data from a standardized meta-data
- *    record into application objects.
- *
- *  4) Convert documents
- *  * binary converters: wrap binary document converters (e.g. antidoc) in
- *    a well-defined and re-usable way.
- *
- *  5) Search
- *  * indexing: pre-process data (extract, tokenize, remove stopwords,
- *    stem) for indexing.
- *  * finding: pre-process queries (parse, tokenize, remove stopwords,
- *    stem) to access the index
- */
 
 namespace PKP\filter;
 
@@ -414,26 +341,32 @@ class Filter extends \PKP\core\DataObject
     public function isCompatibleWithRuntimeEnvironment()
     {
         if ($this->_runtimeEnvironment === false) {
-            $phpVersionMin = $phpVersionMax = $phpExtensions = $externalPrograms = null;
             // The runtime environment has never been
             // queried before.
             $runtimeSettings = $this->supportedRuntimeEnvironmentSettings();
 
             // Find out whether we have any runtime restrictions set.
             $hasRuntimeSettings = false;
+            $runtimeValues = [];
+            
             foreach ($runtimeSettings as $runtimeSetting => $defaultValue) {
                 if ($this->hasData($runtimeSetting)) {
-                    $$runtimeSetting = $this->getData($runtimeSetting);
+                    $runtimeValues[$runtimeSetting] = $this->getData($runtimeSetting);
                     $hasRuntimeSettings = true;
                 } else {
-                    $$runtimeSetting = $defaultValue;
+                    $runtimeValues[$runtimeSetting] = $defaultValue;
                 }
             }
 
             // If we found any runtime restrictions then construct a
             // runtime environment from the settings.
             if ($hasRuntimeSettings) {
-                $this->_runtimeEnvironment = new RuntimeEnvironment($phpVersionMin, $phpVersionMax, $phpExtensions, $externalPrograms);
+                $this->_runtimeEnvironment = new RuntimeEnvironment(
+                    $runtimeValues['phpVersionMin'],
+                    $runtimeValues['phpVersionMax'],
+                    $runtimeValues['phpExtensions'],
+                    $runtimeValues['externalPrograms']
+                );
             } else {
                 // Set null so that we don't try to construct
                 // a runtime environment object again.

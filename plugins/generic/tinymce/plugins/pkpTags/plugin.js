@@ -13,7 +13,7 @@ tinymce.PluginManager.add('pkpTags', function(editor, url) {
 		if(document.createStyleSheet){
 			document.createStyleSheet(cssURL);
 		} else {
-			cssLink = editor.dom.create('link', {
+			var cssLink = editor.dom.create('link', {
 				rel: 'stylesheet',
 				href: cssURL
 			});
