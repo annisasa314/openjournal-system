@@ -65,7 +65,9 @@ class EventServiceProvider extends LaravelEventServiceProvider
             }
         };
 
-        return collect($this->discoverEventsWithin())
+        $discoverEventsWithin = $this->discoverEventsWithin();
+        
+        return collect($discoverEventsWithin)
             ->reject(function ($directory) {
                 return !is_dir($directory);
             })

@@ -83,3 +83,5 @@ php_errors.log
 
 # Documentation build files
 /docs/_build/
+
+.dockerignore
