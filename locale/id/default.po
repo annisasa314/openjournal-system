@@ -214,3 +214,21 @@ msgstr "R"
 #~ msgstr ""
 #~ "Naskah mengikuti aturan gaya selingkung dan bibliografi yang disyaratkan "
 #~ "dalam Panduan Penulis."
+
+msgid "##submission.wizard.title##"
+msgstr "Form Pengajuan Naskah"
+
+msgid "##submission.wizard.beforeStart##"
+msgstr "Sebelum Memulai Pengajuan"
+
+msgid "##default.submission.step.beforeYouBegin##"
+msgstr "Tahapan Persiapan Pengajuan Naskah Artikel Ilmiah"
+
+msgid "##submission.submit.submissionChecklistConfirm##"
+msgstr "Saya telah membaca dan menyetujui seluruh persyaratan dalam daftar periksa pengajuan."
+
+msgid "##submission.wizard.privacyConsent##"
+msgstr "Saya menyetujui kebijakan privasi jurnal ini dan memberikan izin untuk memproses data pribadi saya sebagaimana dijelaskan."
+
+msgid "##submission.wizard.start##"
+msgstr "Mulai Pengajuan"

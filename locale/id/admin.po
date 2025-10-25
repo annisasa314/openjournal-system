@@ -260,144 +260,20 @@ msgstr ""
 msgid "admin.settings.statistics.sushiPlatform.isSiteSushiPlatform"
 msgstr "Jadikan website sebagai flatform semua jurnal."
 
-msgid "##manager.dois.actions.markStale.label##"
-msgstr "Tandai DOI Terdaftar"
-
-msgid "##manager.dois.actions.markStale.prompt##"
-msgstr "Anda akan menandai catatan metadata DOI untuk 0 item sebagai terdaftar. Apakah Anda yakin ingin menandai catatan ini sebagai terdaftar?"
-
-msgid "##manager.dois.actions.markUnregistered.label##"
-msgstr "Tandai DOI Tidak Terdaftar"
-
-msgid "##manager.dois.actions.markUnregistered.prompt##"
-msgstr "Anda akan menandai catatan metadata DOI untuk 0 item sebagai tidak terdaftar. Apakah Anda yakin ingin menandai catatan ini sebagai tidak terdaftar?"
-
-msgid "##manager.dois.actions.markStale.label##"
-msgstr "Tandai DOI Perlu Disinkronkan"
-
-msgid "##manager.dois.actions.markStale.prompt##"
-msgstr "Anda akan menandai rekaman metadata DOI untuk 0 item sebagai perlu disinkronkan. Status Perlu Disinkronkan hanya dapat diterapkan pada DOI yang telah dikirimkan sebelumnya. Apakah Anda yakin ingin menandai rekaman ini sebagai kedaluwarsa?"
-
-msgid "##manager.dois.actions.description##"
-msgstr "Aksi DOI"
-
-msgid "##plugins.generic.allowedUploads.displayName##"
-msgstr "Plugin Unggahan yang Diizinkan"
-
-msgid "##plugins.generic.allowedUploads.description##"
-msgstr "Plugin Unggahan yang Diizinkan memungkinkan untuk memilih jenis file yang diperbolehkan saat mengirimkan naskah. CATATAN! Ini bukan plugin keamanan! Pastikan direktori file berada di luar root web."
-
-msgid "##plugins.generic.allowedUploads.manager.settings.description##"
-msgstr "Tambahkan daftar ekstensi file yang diizinkan, dipisahkan dengan titik koma. Misalnya doc; docx; pdf; gif; jpg lalu klik OK."
-
-msgid "##plugins.generic.allowedUploads.manager.settings.allowedExtensions##"
-msgstr "Ekstensi file yang diizinkan"
+msgid "##submission.wizard.title##"
+msgstr "Form Pengajuan Naskah"
 
 msgid "##submission.wizard.beforeStart##"
 msgstr "Sebelum Memulai Pengajuan"
 
-msgid "##manager.setup.workflow.beginSubmissionHelp.description##"
-msgstr "Bagian ini membantu penulis memahami langkah-langkah awal proses pengajuan naskah, termasuk informasi penting sebelum memulai."
-
 msgid "##default.submission.step.beforeYouBegin##"
-msgstr "Sebelum Anda Memulai"
+msgstr "Tahapan Persiapan Pengajuan Naskah Artikel Ilmiah"
 
-msgid "##manager.setup.workflow.uploadFilesHelp.description##"
-msgstr "Panduan ini menjelaskan cara mengunggah berkas yang diperlukan untuk pengajuan, termasuk naskah utama dan bahan pendukung lainnya."
+msgid "##submission.submit.submissionChecklistConfirm##"
+msgstr "Saya telah membaca dan menyetujui seluruh persyaratan dalam daftar periksa pengajuan."
 
-msgid "##manager.setup.workflow.contributorsHelp.description##"
-msgstr "Bagian ini memungkinkan penulis menambahkan kontributor lain yang terlibat dalam naskah, seperti penulis tambahan, editor tamu, atau penyusun data."
+msgid "##submission.wizard.privacyConsent##"
+msgstr "Saya menyetujui kebijakan privasi jurnal ini dan memberikan izin untuk memproses data pribadi saya sebagaimana dijelaskan."
 
-msgid "##default.submission.step.contributors##"
-msgstr "Kontributor"
-
-msgid "##manager.setup.workflow.detailsHelp.description##"
-msgstr "Langkah ini mencakup informasi dasar naskah, seperti judul, abstrak, kata kunci, dan bahasa yang digunakan."
-
-msgid "##default.submission.step.details##"
-msgstr "Detail Naskah"
-
-msgid "##submission.forTheEditors##"
-msgstr "Untuk Editor"
-
-msgid "##manager.setup.workflow.forTheEditorsHelp.description##"
-msgstr "Bagian ini memberi ruang bagi penulis untuk menyertakan catatan atau pesan kepada editor, seperti informasi tambahan atau permintaan khusus."
-
-msgid "##default.submission.step.forTheEditors##"
-msgstr "Untuk Editor"
-
-msgid "##submission.reviewAndSubmit##"
-msgstr "Tinjau dan Kirim"
-
-msgid "##manager.setup.workflow.reviewHelp.description##"
-msgstr "Pada langkah ini, penulis dapat meninjau semua informasi pengajuan sebelum mengirimkannya secara resmi ke jurnal."
-
-msgid "##default.submission.step.review##"
-msgstr "Tinjau"
-
-msgid "##submission.dataAvailability##"
-msgstr "Ketersediaan Data"
-
-msgid "##manager.setup.metadata.dataAvailability.description##"
-msgstr "Tambahkan pernyataan mengenai ketersediaan data penelitian, misalnya apakah data tersedia secara terbuka atau dapat diakses atas permintaan."
-
-msgid "##manager.setup.metadata.dataAvailability.enable##"
-msgstr "Aktifkan kolom Ketersediaan Data dalam pengajuan naskah."
-
-msgid "##category.category##"
-msgstr "Kategori"
-
-msgid "##manager.submitWithCategories.description##"
-msgstr "Izinkan penulis memilih kategori saat melakukan pengajuan naskah."
-
-msgid "##manager.submitWithCategories.yes##"
-msgstr "Ya, izinkan penulis memilih kategori."
-
-msgid "##manager.submitWithCategories.no##"
-msgstr "Tidak, jangan tampilkan pilihan kategori."
-
-msgid "##doi.manager.settings.doiSuffixManual##"
-msgstr "Tentukan Sufiks DOI Secara Manual"
-
-msgid "##doi.manager.settings.doiSuffixUserDefined##"
-msgstr "Gunakan Sufiks DOI yang Ditentukan oleh Pengguna"
-
-msgid "##doi.manager.settings.registrationAgency.noPluginsEnabled.label##"
-msgstr "Tidak Ada Plugin Pendaftaran DOI yang Diaktifkan"
-
-msgid "##doi.manager.settings.registrationAgency.noPluginsEnabled.description##"
-msgstr "Tidak ada plugin lembaga pendaftaran DOI (seperti Crossref atau DataCite) yang diaktifkan. Aktifkan salah satu plugin pendaftaran untuk memungkinkan registrasi DOI otomatis melalui pengaturan plugin manajer."
-
-msgid "##stats.name.submissionsSkipped##"
-msgstr "Pengajuan yang Dilewati"
-
-msgid "##stats.name.submissionsInProgress##"
-msgstr "Pengajuan yang Sedang Berlangsung"
-
-msgid "##stats.name.submissionsImported##"
-msgstr "Pengajuan yang Diimpor"
-
-
-msgid "##admin.systemInformation.description##"
-msgstr "Tampilkan informasi sistem OJS, termasuk versi aplikasi, konfigurasi server, dan pengaturan lingkungan."
-
-msgid "##admin.systemInformation.view##"
-msgstr "Lihat Informasi Sistem"
-
-msgid "##admin.scheduledTask.clearLogs.description##"
-msgstr "Hapus log tugas terjadwal yang lama untuk mengosongkan ruang penyimpanan dan menjaga kinerja sistem."
-
-msgid "##admin.scheduledTask.clearLogs.delete##"
-msgstr "Hapus Log Tugas Terjadwal"
-
-msgid "##navigation.tools.jobs##"
-msgstr "Pekerjaan Sistem"
-
-msgid "##navigation.tools.jobs.description##"
-msgstr "Kelola dan pantau pekerjaan sistem, termasuk tugas otomatis dan proses latar belakang."
-
-msgid "##navigation.tools.jobs.view##"
-msgstr "Lihat Pekerjaan"
-
-msgid "##navigation.tools.jobs.failed.view##"
-msgstr "Lihat Pekerjaan yang Gagal"
+msgid "##submission.wizard.start##"
+msgstr "Mulai Pengajuan"
