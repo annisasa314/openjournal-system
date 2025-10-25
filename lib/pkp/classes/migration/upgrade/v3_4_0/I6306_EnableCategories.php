@@ -3,13 +3,13 @@
 /**
  * @file classes/migration/upgrade/v3_4_0/I6306_EnableCategories.php
  *
- * Copyright (c) 2014-2022 Simon Fraser University
- * Copyright (c) 2000-2022 John Willinsky
+ * Copyright (c) 2014-2024 Simon Fraser University
+ * Copyright (c) 2000-2024 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
  * @class I6306_EnableCategories
  *
- * @brief Set the new context setting,`submitWithCategories`, to `true` for
+ * @brief Set the new context setting, `submitWithCategories`, to `true` for
  *   existing journals to preserve the pre-existing behaviour.
  */
 
@@ -26,28 +26,47 @@ abstract class I6306_EnableCategories extends Migration
 
     public function up(): void
     {
-        $contextIds = DB::table($this->getContextTable())
-            ->get([$this->getContextIdColumn()])
-            ->pluck($this->getContextIdColumn());
+        // Ambil nama tabel dan kolom dari class turunan
+        $contextTable = $this->getContextTable();
+        $contextSettingsTable = $this->getContextSettingsTable();
+        $contextIdColumn = $this->getContextIdColumn();
 
-        if (!$contextIds->count()) {
+        // Validasi nama tabel dan kolom agar tidak berasal dari input user
+        $allowedContextTables = ['journals', 'presses', 'contexts'];
+        $allowedContextColumns = ['journal_id', 'press_id', 'context_id'];
+
+        if (!in_array($contextTable, $allowedContextTables, true)) {
+            throw new \RuntimeException("Invalid context table: {$contextTable}");
+        }
+
+        if (!in_array($contextIdColumn, $allowedContextColumns, true)) {
+            throw new \RuntimeException("Invalid context column: {$contextIdColumn}");
+        }
+
+        // Ambil semua ID context yang ada
+        $contextIds = DB::table($contextTable)->pluck($contextIdColumn);
+
+        if ($contextIds->isEmpty()) {
             return;
         }
 
+        // Siapkan data untuk diinsert secara massal
+        $insertData = $contextIds->map(fn ($id) => [
+            $contextIdColumn => $id,
+            'setting_name' => 'submitWithCategories',
+            'setting_value' => '1',
+        ])->toArray();
 
-        DB::table($this->getContextSettingsTable())->insert(
-            $contextIds->map(fn (int $id) => [
-                $this->getContextIdColumn() => $id,
-                'setting_name' => 'submitWithCategories',
-                'setting_value' => '1',
-            ])
-                ->toArray()
-        );
+        // Gunakan Query Builder yang aman (parameter binding)
+        DB::table($contextSettingsTable)->insert($insertData);
     }
 
     public function down(): void
     {
-        DB::table($this->getContextSettingsTable())
+        $contextSettingsTable = $this->getContextSettingsTable();
+
+        // Hapus setting yang ditambahkan
+        DB::table($contextSettingsTable)
             ->where('setting_name', 'submitWithCategories')
             ->delete();
     }
