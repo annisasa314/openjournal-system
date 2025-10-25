@@ -243,7 +243,7 @@ class PluginGalleryGridHandler extends GridHandler
                 $statusClass = 'incompatible';
                 break;
             default:
-                return throw new Exception('Unexpected gallery state');
+                throw new Exception('Unexpected gallery state');
         }
         $templateMgr->assign([
             'statusKey' => $statusKey,

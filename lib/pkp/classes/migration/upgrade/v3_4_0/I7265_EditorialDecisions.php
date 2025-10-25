@@ -48,10 +48,9 @@ abstract class I7265_EditorialDecisions extends \PKP\migration\Migration
             $table->bigInteger('round')->nullable()->change();
         });
 
-        // Menggunakan Query Builder dengan kondisi yang aman
         DB::table('edit_decisions')
-            ->where('review_round_id', 0)
-            ->orWhere('round', 0)
+            ->where('review_round_id', '=', 0)
+            ->orWhere('round', '=', 0)
             ->update([
                 'review_round_id' => null,
                 'round' => null
@@ -72,7 +71,6 @@ abstract class I7265_EditorialDecisions extends \PKP\migration\Migration
             $table->dropForeign(['review_round_id']);
         });
 
-        // Menggunakan Query Builder dengan kondisi yang aman
         DB::table('edit_decisions')
             ->whereNull('review_round_id')
             ->orWhereNull('round')
@@ -92,32 +90,20 @@ abstract class I7265_EditorialDecisions extends \PKP\migration\Migration
      */
     protected function upNotifyAllAuthors()
     {
-        $contextTable = $this->getContextTable();
-        $contextSettingsTable = $this->getContextSettingsTable();
-        $contextIdColumn = $this->getContextIdColumn();
-
-        // Validasi nama tabel dan kolom untuk mencegah SQL injection
-        $this->validateTableAndColumnNames($contextTable, $contextSettingsTable, $contextIdColumn);
-
-        // Menggunakan chunk untuk menghindari memory issues dengan data besar
-        DB::table($contextTable)
-            ->select($contextIdColumn)
-            ->chunkById(100, function ($contexts) use ($contextSettingsTable, $contextIdColumn) {
-                $insertData = [];
-                
-                foreach ($contexts as $context) {
-                    $insertData[] = [
-                        $contextIdColumn => $context->{$contextIdColumn},
-                        'setting_name' => 'notifyAllAuthors',
-                        'setting_value' => '1',
-                    ];
-                }
-
-                // Insert data secara batch
-                if (!empty($insertData)) {
-                    DB::table($contextSettingsTable)->insert($insertData);
-                }
-            }, $contextIdColumn);
+        DB::table($this->getContextSettingsTable())
+            ->insert(
+                DB::table($this->getContextTable())
+                    ->pluck($this->getContextIdColumn())
+                    ->map(
+                        function (int $contextId) {
+                            return [
+                                $this->getContextIdColumn() => $contextId,
+                                'setting_name' => 'notifyAllAuthors',
+                                'setting_value' => 1,
+                            ];
+                        }
+                    )->toArray()
+            );
     }
 
     /**
@@ -125,39 +111,9 @@ abstract class I7265_EditorialDecisions extends \PKP\migration\Migration
      */
     protected function downNotifyAllAuthors()
     {
-        $contextSettingsTable = $this->getContextSettingsTable();
-
-        // Validasi nama tabel
-        $allowedSettingsTables = ['journal_settings', 'press_settings', 'context_settings'];
-        if (!in_array($contextSettingsTable, $allowedSettingsTables, true)) {
-            throw new \RuntimeException("Invalid context settings table: {$contextSettingsTable}");
-        }
-
-        DB::table($contextSettingsTable)
+        DB::table($this->getContextSettingsTable())
             ->where('setting_name', 'notifyAllAuthors')
             ->delete();
-    }
-
-    /**
-     * Validate table and column names to prevent SQL injection
-     */
-    private function validateTableAndColumnNames(string $contextTable, string $contextSettingsTable, string $contextIdColumn): void
-    {
-        $allowedContextTables = ['journals', 'presses', 'contexts'];
-        $allowedSettingsTables = ['journal_settings', 'press_settings', 'context_settings'];
-        $allowedContextColumns = ['journal_id', 'press_id', 'context_id'];
-
-        if (!in_array($contextTable, $allowedContextTables, true)) {
-            throw new \RuntimeException("Invalid context table: {$contextTable}");
-        }
-
-        if (!in_array($contextSettingsTable, $allowedSettingsTables, true)) {
-            throw new \RuntimeException("Invalid context settings table: {$contextSettingsTable}");
-        }
-
-        if (!in_array($contextIdColumn, $allowedContextColumns, true)) {
-            throw new \RuntimeException("Invalid context column: {$contextIdColumn}");
-        }
     }
 
     abstract protected function getContextTable(): string;

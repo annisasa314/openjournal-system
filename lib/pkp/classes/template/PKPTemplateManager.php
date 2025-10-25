@@ -1819,24 +1819,19 @@ class PKPTemplateManager extends Smarty
             $parameters['context'] = $context;
         }
 
-    // Extract the reserved variables named in $paramList, and remove them
-    // from the parameters array. Variables remaining in parameters will be passed
-    // along to Request::url as extra parameters.
-    $paramList = ['params', 'router', 'context', 'page', 'component', 'op', 'path', 'anchor', 'escape'];
-
-    // Create an array to store the extracted values
-    $extractedParams = [];
-    foreach ($paramList as $parameter) {
-        if (isset($parameters[$parameter])) {
-            $extractedParams[$parameter] = $parameters[$parameter];
-        } else {
-            $extractedParams[$parameter] = null;
+        // Extract the reserved variables named in $paramList, and remove them
+        // from the parameters array. Variables remaining in parameters will be passed
+        // along to Request::url as extra parameters.
+        $params = $router = $page = $component = $anchor = $escape = $op = $path = null;
+        $paramList = ['params', 'router', 'context', 'page', 'component', 'op', 'path', 'anchor', 'escape'];
+        foreach ($paramList as $parameter) {
+            if (isset($parameters[$parameter])) {
+                $$parameter = $parameters[$parameter];
+            } else {
+                $$parameter = null;
+            }
+            unset($parameters[$parameter]);
         }
-        unset($parameters[$parameter]);
-    }
-
-    // Now use $extractedParams['params'], $extractedParams['router'], etc.
-    // instead of the individual variables
 
         // Merge parameters specified in the {url paramName=paramValue} format with
         // those optionally supplied in {url params=$someAssociativeArray} format
