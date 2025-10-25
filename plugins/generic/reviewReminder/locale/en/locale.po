@@ -1,0 +1,17 @@
+msgid "plugins.generic.reviewReminder.displayName"
+msgstr "Review Reminder"
+
+msgid "plugins.generic.reviewReminder.description"
+msgstr "Sends a review reminder email to assigned reviewers."
+
+msgid "plugins.generic.reviewReminder.ics.description"
+msgstr "Deadline for review {$submissionTitle}: {$submissionReviewUrl}"
+
+msgid "plugins.generic.reviewReminder.ics.description.urlNotAvailable"
+msgstr "URL not available"
+
+msgid "plugins.generic.reviewReminder.ics.summary"
+msgstr "{$journalName} - Schedule Your Review"
+
+msgid "plugins.generic.reviewReminder.email.body"
+msgstr "You can use the attached reminder to add to the calendar of your choice."
