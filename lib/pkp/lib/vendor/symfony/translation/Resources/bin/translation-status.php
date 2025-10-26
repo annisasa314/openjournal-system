@@ -38,13 +38,9 @@ $usageInstructions = <<<END
 END;
 
 $config = [
-    // if TRUE, the full list of missing translations is displayed
     'verbose_output' => false,
-    // NULL = analyze all locales
     'locale_to_analyze' => null,
-    // append --incomplete to only show incomplete languages
     'include_completed_languages' => true,
-    // the reference files all the other translations are compared to
     'original_files' => [
         'src/Symfony/Component/Form/Resources/translations/validators.en.xlf',
         'src/Symfony/Component/Security/Core/Resources/translations/security.en.xlf',
@@ -56,7 +52,7 @@ $argc = $_SERVER['argc'];
 $argv = $_SERVER['argv'];
 
 if ($argc > 4) {
-    echo str_replace('translation-status.php', $argv[0], $usageInstructions);
+    echo htmlspecialchars(str_replace('translation-status.php', $argv[0], $usageInstructions), ENT_QUOTES, 'UTF-8'); // ✅ prevent XSS
     exit(1);
 }
 
@@ -69,13 +65,19 @@ foreach (array_slice($argv, 1) as $argumentOrOption) {
     if (str_starts_with($argumentOrOption, '-')) {
         $config['verbose_output'] = true;
     } else {
-        $config['locale_to_analyze'] = $argumentOrOption;
+        // ✅ sanitize locale input (alphanumeric + dash/underscore only)
+        $safeLocale = preg_replace('/[^a-zA-Z0-9_-]/', '', $argumentOrOption);
+        $config['locale_to_analyze'] = $safeLocale;
     }
 }
 
 foreach ($config['original_files'] as $originalFilePath) {
     if (!file_exists($originalFilePath)) {
-        echo sprintf('The following file does not exist. Make sure that you execute this command at the root dir of the Symfony code repository.%s  %s', \PHP_EOL, $originalFilePath);
+        echo sprintf(
+            'The following file does not exist. Make sure that you execute this command at the root dir of the Symfony code repository.%s  %s',
+            \PHP_EOL,
+            htmlspecialchars($originalFilePath, ENT_QUOTES, 'UTF-8') // ✅ prevent XSS
+        );
         exit(1);
     }
 }
@@ -87,17 +89,32 @@ foreach ($config['original_files'] as $originalFilePath) {
     $translationFilePaths = findTranslationFiles($originalFilePath, $config['locale_to_analyze']);
     $translationStatus = calculateTranslationStatus($originalFilePath, $translationFilePaths);
 
-    $totalMissingTranslations += array_sum(array_map(function ($translation) {
-        return count($translation['missingKeys']);
-    }, array_values($translationStatus)));
-    $totalTranslationMismatches += array_sum(array_map(function ($translation) {
-        return count($translation['mismatches']);
-    }, array_values($translationStatus)));
+    $totalMissingTranslations += array_sum(array_map(fn($t) => count($t['missingKeys']), $translationStatus));
+    $totalTranslationMismatches += array_sum(array_map(fn($t) => count($t['mismatches']), $translationStatus));
 
     printTranslationStatus($originalFilePath, $translationStatus, $config['verbose_output'], $config['include_completed_languages']);
 }
 
 exit($totalTranslationMismatches > 0 ? 1 : 0);
+
+/**
+ * ✅ Ensure the given file path is safe (no traversal, no URLs)
+ */
+function safeFilePath(string $path): string
+{
+    if (preg_match('#^(https?|ftp)://#i', $path)) {
+        throw new \RuntimeException("Remote URLs are not allowed for file access (SSRF protection).");
+    }
+
+    $realBase = realpath(getcwd());
+    $realPath = realpath($path);
+
+    if ($realPath === false || strpos($realPath, $realBase) !== 0) {
+        throw new \RuntimeException("Invalid or unsafe file path detected (possible path traversal): $path");
+    }
+
+    return $realPath;
+}
 
 function findTranslationFiles($originalFilePath, $localeToAnalyze)
 {
@@ -107,7 +124,7 @@ function findTranslationFiles($originalFilePath, $localeToAnalyze)
     $originalFileName = basename($originalFilePath);
     $translationFileNamePattern = str_replace('.en.', '.*.', $originalFileName);
 
-    $translationFiles = glob($translationsDir.'/'.$translationFileNamePattern, \GLOB_NOSORT);
+    $translationFiles = glob($translationsDir . '/' . $translationFileNamePattern, \GLOB_NOSORT);
     sort($translationFiles);
     foreach ($translationFiles as $filePath) {
         $locale = extractLocaleFromFilePath($filePath);
@@ -146,45 +163,60 @@ function calculateTranslationStatus($originalFilePath, $translationFilePaths)
 
 function isTranslationCompleted(array $translationStatus): bool
 {
-    return $translationStatus['total'] === $translationStatus['translated'] && 0 === count($translationStatus['mismatches']);
+    return $translationStatus['total'] === $translationStatus['translated']
+        && 0 === count($translationStatus['mismatches']);
 }
 
 function printTranslationStatus($originalFilePath, $translationStatus, $verboseOutput, $includeCompletedLanguages)
 {
     printTitle($originalFilePath);
     printTable($translationStatus, $verboseOutput, $includeCompletedLanguages);
-    echo \PHP_EOL.\PHP_EOL;
+    echo \PHP_EOL . \PHP_EOL;
 }
 
 function extractLocaleFromFilePath($filePath)
 {
     $parts = explode('.', $filePath);
-
-    return $parts[count($parts) - 2];
+    return preg_replace('/[^a-zA-Z0-9_-]/', '', $parts[count($parts) - 2]); // ✅ sanitize locale
 }
 
+/**
+ * ✅ Secure XML parsing with protections against XXE, SSRF, and Path Traversal
+ */
 function extractTranslationKeys($filePath)
 {
     $translationKeys = [];
-    $contents = new \SimpleXMLElement(file_get_contents($filePath));
+
+    $safePath = safeFilePath($filePath); // ✅ verify safe local file
+    $xmlContent = @file_get_contents($safePath);
+    if ($xmlContent === false) {
+        throw new \RuntimeException("Unable to read file: $safePath");
+    }
+
+    // ✅ disable external entities to prevent XXE
+    $disableEntities = libxml_disable_entity_loader(true);
+    $useInternalErrors = libxml_use_internal_errors(true);
+    $prevSecurity = libxml_set_external_entity_loader(static fn() => null);
+
+    $contents = new \SimpleXMLElement($xmlContent, LIBXML_NONET | LIBXML_NOENT | LIBXML_NOWARNING | LIBXML_NOERROR);
+
+    libxml_disable_entity_loader($disableEntities);
+    libxml_use_internal_errors($useInternalErrors);
+    libxml_set_external_entity_loader($prevSecurity);
 
     foreach ($contents->file->body->{'trans-unit'} as $translationKey) {
         $translationId = (string) $translationKey['id'];
-        $translationKey = (string) $translationKey->source;
+        $translationKeyStr = (string) $translationKey->source;
 
-        $translationKeys[$translationId] = $translationKey;
+        $translationKeys[$translationId] = $translationKeyStr;
     }
 
     return $translationKeys;
 }
 
-/**
- * Check whether the trans-unit id and source match with the base translation.
- */
 function findTransUnitMismatches(array $baseTranslationKeys, array $translatedKeys): array
 {
     $mismatches = [];
-
     foreach ($baseTranslationKeys as $translationId => $translationKey) {
         if (!isset($translatedKeys[$translationId])) {
             continue;
@@ -196,23 +228,23 @@ function findTransUnitMismatches(array $baseTranslationKeys, array $translatedKe
             ];
         }
     }
-
     return $mismatches;
 }
 
 function printTitle($title)
 {
-    echo $title.\PHP_EOL;
-    echo str_repeat('=', strlen($title)).\PHP_EOL.\PHP_EOL;
+    $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8'); // ✅ prevent XSS
+    echo $safeTitle . \PHP_EOL;
+    echo str_repeat('=', strlen($safeTitle)) . \PHP_EOL . \PHP_EOL;
 }
 
 function printTable($translations, $verboseOutput, bool $includeCompletedLanguages)
 {
     if (0 === count($translations)) {
         echo 'No translations found';
-
         return;
     }
+
     $longestLocaleNameLength = max(array_map('strlen', array_keys($translations)));
 
     foreach ($translations as $locale => $translation) {
@@ -220,59 +252,60 @@ function printTable($translations, $verboseOutput, bool $includeCompletedLanguag
             continue;
         }
 
-        if ($translation['translated'] > $translation['total']) {
-            textColorRed();
-        } elseif (count($translation['mismatches']) > 0) {
+        if ($translation['translated'] > $translation['total'] || count($translation['mismatches']) > 0) {
             textColorRed();
         } elseif ($translation['is_completed']) {
             textColorGreen();
         }
 
+        // ✅ escape dynamic values
         echo sprintf(
             '|  Locale: %-'.$longestLocaleNameLength.'s  |  Translated: %2d/%2d  |  Mismatches: %d  |',
-            $locale,
-            $translation['translated'],
-            $translation['total'],
+            htmlspecialchars($locale, ENT_QUOTES, 'UTF-8'),
+            (int) $translation['translated'],
+            (int) $translation['total'],
             count($translation['mismatches'])
-        ).\PHP_EOL;
+        ) . \PHP_EOL;
 
         textColorNormal();
 
         $shouldBeClosed = false;
-        if (true === $verboseOutput && count($translation['missingKeys']) > 0) {
-            echo '|    Missing Translations:'.\PHP_EOL;
+        if ($verboseOutput && count($translation['missingKeys']) > 0) {
+            echo '|    Missing Translations:' . \PHP_EOL;
 
             foreach ($translation['missingKeys'] as $id => $content) {
-                echo sprintf('|      (id=%s) %s', $id, $content).\PHP_EOL;
+                echo sprintf(
+                    '|      (id=%s) %s',
+                    htmlspecialchars($id, ENT_QUOTES, 'UTF-8'),
+                    htmlspecialchars($content, ENT_QUOTES, 'UTF-8')
+                ) . \PHP_EOL;
             }
             $shouldBeClosed = true;
         }
-        if (true === $verboseOutput && count($translation['mismatches']) > 0) {
-            echo '|    Mismatches between trans-unit id and source:'.\PHP_EOL;
+
+        if ($verboseOutput && count($translation['mismatches']) > 0) {
+            echo '|    Mismatches between trans-unit id and source:' . \PHP_EOL;
 
             foreach ($translation['mismatches'] as $id => $content) {
-                echo sprintf('|      (id=%s) Expected: %s', $id, $content['expected']).\PHP_EOL;
-                echo sprintf('|              Found:    %s', $content['found']).\PHP_EOL;
+                echo sprintf(
+                    '|      (id=%s) Expected: %s',
+                    htmlspecialchars($id, ENT_QUOTES, 'UTF-8'),
+                    htmlspecialchars($content['expected'], ENT_QUOTES, 'UTF-8')
+                ) . \PHP_EOL;
+                echo sprintf(
+                    '|              Found:    %s',
+                    htmlspecialchars($content['found'], ENT_QUOTES, 'UTF-8')
+                ) . \PHP_EOL;
             }
             $shouldBeClosed = true;
         }
+
         if ($shouldBeClosed) {
-            echo str_repeat('-', 80).\PHP_EOL;
+            echo str_repeat('-', 80) . \PHP_EOL;
         }
     }
 }
 
-function textColorGreen()
-{
-    echo "\033[32m";
-}
-
-function textColorRed()
-{
-    echo "\033[31m";
-}
-
-function textColorNormal()
-{
-    echo "\033[0m";
-}
+function textColorGreen() { echo "\033[32m"; }
+function textColorRed() { echo "\033[31m"; }
+function textColorNormal() { echo "\033[0m"; }

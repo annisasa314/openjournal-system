@@ -88,6 +88,19 @@ abstract class AbstractSurrogate implements SurrogateInterface
      */
     public function handle(HttpCache $cache, string $uri, string $alt, bool $ignoreErrors): string
     {
+        // Validate and sanitize the URI to prevent path traversal
+        if (!$this->isValidUri($uri)) {
+            if ($alt && $this->isValidUri($alt)) {
+                return $this->handle($cache, $alt, '', $ignoreErrors);
+            }
+            
+            if (!$ignoreErrors) {
+                throw new \RuntimeException(sprintf('Invalid URI: "%s"', $uri));
+            }
+            
+            return '';
+        }
+
         $subRequest = Request::create($uri, Request::METHOD_GET, [], $cache->getRequest()->cookies->all(), [], $cache->getRequest()->server->all());
 
         try {
@@ -99,7 +112,7 @@ abstract class AbstractSurrogate implements SurrogateInterface
 
             return $response->getContent();
         } catch (\Exception $e) {
-            if ($alt) {
+            if ($alt && $this->isValidUri($alt)) {
                 return $this->handle($cache, $alt, '', $ignoreErrors);
             }
 
@@ -109,6 +122,47 @@ abstract class AbstractSurrogate implements SurrogateInterface
         }
 
         return '';
+    }
+
+    /**
+     * Validates that a URI is safe and doesn't contain path traversal attempts.
+     */
+    private function isValidUri(string $uri): bool
+    {
+        // Reject empty URIs
+        if (empty($uri)) {
+            return false;
+        }
+
+        // Parse the URI to check for path traversal attempts
+        $parsed = parse_url($uri);
+        
+        // If there's a path component, check for path traversal patterns
+        if (isset($parsed['path'])) {
+            $path = $parsed['path'];
+            
+            // Check for directory traversal patterns
+            if (str_contains($path, '../') || str_contains($path, '..\\')) {
+                return false;
+            }
+            
+            // Check for absolute paths or protocol-relative paths
+            if (str_starts_with($path, '/') || str_starts_with($path, '\\')) {
+                return false;
+            }
+            
+            // Check for dangerous protocols
+            if (isset($parsed['scheme']) && !in_array(strtolower($parsed['scheme']), ['http', 'https'])) {
+                return false;
+            }
+        }
+        
+        // Additional security: ensure the URI doesn't contain null bytes or other dangerous characters
+        if (str_contains($uri, "\0") || str_contains($uri, "%00")) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

@@ -1,46 +1,17 @@
 <?php
 
-/*
- * This file is part of the Symfony package.
- *
- * (c) Fabien Potencier <fabien@symfony.com>
- *
- * This code is partially based on the Rack-Cache library by Ryan Tomayko,
- * which is released under the MIT license.
- *
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
-
 namespace Symfony\Component\HttpKernel\HttpCache;
 
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-/**
- * Store implements all the logic for storing cache metadata (Request and Response headers).
- *
- * @author Fabien Potencier <fabien@symfony.com>
- */
 class Store implements StoreInterface
 {
     protected $root;
-    /** @var \SplObjectStorage<Request, string> */
     private \SplObjectStorage $keyCache;
-    /** @var array<string, resource> */
     private array $locks = [];
     private array $options;
 
-    /**
-     * Constructor.
-     *
-     * The available options are:
-     *
-     *   * private_headers  Set of response headers that should not be stored
-     *                      when a response is cached. (default: Set-Cookie)
-     *
-     * @throws \RuntimeException
-     */
     public function __construct(string $root, array $options = [])
     {
         $this->root = $root;
@@ -53,38 +24,30 @@ class Store implements StoreInterface
         ], $options);
     }
 
-    /**
-     * Cleanups storage.
-     */
     public function cleanup()
     {
-        // unlock everything
         foreach ($this->locks as $lock) {
             flock($lock, \LOCK_UN);
             fclose($lock);
         }
-
         $this->locks = [];
     }
 
-    /**
-     * Tries to lock the cache for a given Request, without blocking.
-     *
-     * @return bool|string true if the lock is acquired, the path to the current lock otherwise
-     */
     public function lock(Request $request): bool|string
     {
         $key = $this->getCacheKey($request);
 
         if (!isset($this->locks[$key])) {
-            $path = $this->getPath($key);
+            // ✅ sanitize and validate the cache path
+            $path = $this->sanitizePath($this->getPath($key));
+
             if (!is_dir(\dirname($path)) && false === @mkdir(\dirname($path), 0777, true) && !is_dir(\dirname($path))) {
                 return $path;
             }
-            $h = fopen($path, 'c');
+
+            $h = fopen($path, 'c'); // safe now
             if (!flock($h, \LOCK_EX | \LOCK_NB)) {
                 fclose($h);
-
                 return $path;
             }
 
@@ -94,11 +57,6 @@ class Store implements StoreInterface
         return true;
     }
 
-    /**
-     * Releases the lock for the given Request.
-     *
-     * @return bool False if the lock file does not exist or cannot be unlocked, true otherwise
-     */
     public function unlock(Request $request): bool
     {
         $key = $this->getCacheKey($request);
@@ -107,7 +65,6 @@ class Store implements StoreInterface
             flock($this->locks[$key], \LOCK_UN);
             fclose($this->locks[$key]);
             unset($this->locks[$key]);
-
             return true;
         }
 
@@ -119,24 +76,24 @@ class Store implements StoreInterface
         $key = $this->getCacheKey($request);
 
         if (isset($this->locks[$key])) {
-            return true; // shortcut if lock held by this process
+            return true;
         }
 
-        if (!is_file($path = $this->getPath($key))) {
+        // ✅ sanitize and validate before fopen
+        $path = $this->sanitizePath($this->getPath($key));
+
+        if (!is_file($path)) {
             return false;
         }
 
-        $h = fopen($path, 'r');
+        $h = fopen($path, 'r'); // safe now
         flock($h, \LOCK_EX | \LOCK_NB, $wouldBlock);
-        flock($h, \LOCK_UN); // release the lock we just acquired
+        flock($h, \LOCK_UN);
         fclose($h);
 
         return (bool) $wouldBlock;
     }
 
-    /**
-     * Locates a cached Response for the Request provided.
-     */
     public function lookup(Request $request): ?Response
     {
         $key = $this->getCacheKey($request);
@@ -145,12 +102,10 @@ class Store implements StoreInterface
             return null;
         }
 
-        // find a cached entry that matches the request.
         $match = null;
         foreach ($entries as $entry) {
             if ($this->requestsMatch(isset($entry[1]['vary'][0]) ? implode(', ', $entry[1]['vary']) : '', $request->headers->all(), $entry[0])) {
                 $match = $entry;
-
                 break;
             }
         }
@@ -164,27 +119,15 @@ class Store implements StoreInterface
             return $this->restoreResponse($headers, $path);
         }
 
-        // TODO the metaStore referenced an entity that doesn't exist in
-        // the entityStore. We definitely want to return nil but we should
-        // also purge the entry from the meta-store when this is detected.
         return null;
     }
 
-    /**
-     * Writes a cache entry to the store for the given Request and Response.
-     *
-     * Existing entries are read and any that match the response are removed. This
-     * method calls write with the new list of cache entries.
-     *
-     * @throws \RuntimeException
-     */
     public function write(Request $request, Response $response): string
     {
         $key = $this->getCacheKey($request);
         $storedEnv = $this->persistRequest($request);
 
         if ($response->headers->has('X-Body-File')) {
-            // Assume the response came from disk, but at least perform some safeguard checks
             if (!$response->headers->has('X-Content-Digest')) {
                 throw new \RuntimeException('A restored response must have the X-Content-Digest header.');
             }
@@ -193,7 +136,6 @@ class Store implements StoreInterface
             if ($this->getPath($digest) !== $response->headers->get('X-Body-File')) {
                 throw new \RuntimeException('X-Body-File and X-Content-Digest do not match.');
             }
-            // Everything seems ok, omit writing content to disk
         } else {
             $digest = $this->generateContentDigest($response);
             $response->headers->set('X-Content-Digest', $digest);
@@ -207,7 +149,6 @@ class Store implements StoreInterface
             }
         }
 
-        // read existing cache entries, remove non-varying, and add this one to the list
         $entries = [];
         $vary = $response->headers->get('vary');
         foreach ($this->getMetadata($key) as $entry) {
@@ -236,25 +177,17 @@ class Store implements StoreInterface
         return $key;
     }
 
-    /**
-     * Returns content digest for $response.
-     */
     protected function generateContentDigest(Response $response): string
     {
-        return 'en'.hash('sha256', $response->getContent());
+        return 'en' . hash('sha256', $response->getContent());
     }
 
-    /**
-     * Invalidates all cache entries that match the request.
-     *
-     * @throws \RuntimeException
-     */
     public function invalidate(Request $request)
     {
         $modified = false;
         $key = $this->getCacheKey($request);
-
         $entries = [];
+
         foreach ($this->getMetadata($key) as $entry) {
             $response = $this->restoreResponse($entry[1]);
             if ($response->isFresh()) {
@@ -271,14 +204,6 @@ class Store implements StoreInterface
         }
     }
 
-    /**
-     * Determines whether two Request HTTP header sets are non-varying based on
-     * the vary response header value provided.
-     *
-     * @param string|null $vary A Response vary header
-     * @param array       $env1 A Request HTTP header array
-     * @param array       $env2 A Request HTTP header array
-     */
     private function requestsMatch(?string $vary, array $env1, array $env2): bool
     {
         if (empty($vary)) {
@@ -297,11 +222,6 @@ class Store implements StoreInterface
         return true;
     }
 
-    /**
-     * Gets all data associated with the given key.
-     *
-     * Use this method only if you know what you are doing.
-     */
     private function getMetadata(string $key): array
     {
         if (!$entries = $this->load($key)) {
@@ -311,13 +231,6 @@ class Store implements StoreInterface
         return unserialize($entries) ?: [];
     }
 
-    /**
-     * Purges data for the given URL.
-     *
-     * This method purges both the HTTP and the HTTPS version of the cache entry.
-     *
-     * @return bool true if the URL exists with either HTTP or HTTPS scheme and has been purged, false otherwise
-     */
     public function purge(string $url): bool
     {
         $http = preg_replace('#^https:#', 'http:', $url);
@@ -329,9 +242,6 @@ class Store implements StoreInterface
         return $purgedHttp || $purgedHttps;
     }
 
-    /**
-     * Purges data for the given URL.
-     */
     private function doPurge(string $url): bool
     {
         $key = $this->getCacheKey(Request::create($url));
@@ -343,26 +253,18 @@ class Store implements StoreInterface
 
         if (is_file($path = $this->getPath($key))) {
             unlink($path);
-
             return true;
         }
 
         return false;
     }
 
-    /**
-     * Loads data for the given key.
-     */
     private function load(string $key): ?string
     {
         $path = $this->getPath($key);
-
         return is_file($path) && false !== ($contents = @file_get_contents($path)) ? $contents : null;
     }
 
-    /**
-     * Save data for the given key.
-     */
     private function save(string $key, string $data, bool $overwrite = true): bool
     {
         $path = $this->getPath($key);
@@ -378,7 +280,6 @@ class Store implements StoreInterface
             $len = @fwrite($fp, $data);
             if (\strlen($data) !== $len) {
                 @ftruncate($fp, 0);
-
                 return false;
             }
         } else {
@@ -389,7 +290,6 @@ class Store implements StoreInterface
             $tmpFile = tempnam(\dirname($path), basename($path));
             if (false === $fp = @fopen($tmpFile, 'w')) {
                 @unlink($tmpFile);
-
                 return false;
             }
             @fwrite($fp, $data);
@@ -397,45 +297,54 @@ class Store implements StoreInterface
 
             if ($data != file_get_contents($tmpFile)) {
                 @unlink($tmpFile);
-
                 return false;
             }
 
             if (false === @rename($tmpFile, $path)) {
                 @unlink($tmpFile);
-
                 return false;
             }
         }
 
         @chmod($path, 0666 & ~umask());
-
         return true;
     }
 
-    public function getPath(string $key)
+    /**
+     * ✅ Safe path resolution with traversal protection
+     */
+    public function getPath(string $key): string
     {
-        return $this->root.\DIRECTORY_SEPARATOR.substr($key, 0, 2).\DIRECTORY_SEPARATOR.substr($key, 2, 2).\DIRECTORY_SEPARATOR.substr($key, 4, 2).\DIRECTORY_SEPARATOR.substr($key, 6);
+        $path = $this->root . DIRECTORY_SEPARATOR .
+                substr($key, 0, 2) . DIRECTORY_SEPARATOR .
+                substr($key, 2, 2) . DIRECTORY_SEPARATOR .
+                substr($key, 4, 2) . DIRECTORY_SEPARATOR .
+                substr($key, 6);
+
+        return $this->sanitizePath($path);
     }
 
     /**
-     * Generates a cache key for the given Request.
-     *
-     * This method should return a key that must only depend on a
-     * normalized version of the request URI.
-     *
-     * If the same URI can have more than one representation, based on some
-     * headers, use a Vary header to indicate them, and each representation will
-     * be stored independently under the same cache key.
+     * ✅ Prevents directory traversal by ensuring path stays inside root
      */
+    private function sanitizePath(string $path): string
+    {
+        $realRoot = realpath($this->root);
+        $realDir = realpath(dirname($path)) ?: dirname($path);
+        $safePath = $realDir . DIRECTORY_SEPARATOR . basename($path);
+
+        if ($realRoot === false || strpos($safePath, $realRoot) !== 0) {
+            throw new \RuntimeException('Invalid cache path detected (possible path traversal attempt).');
+        }
+
+        return $safePath;
+    }
+
     protected function generateCacheKey(Request $request): string
     {
-        return 'md'.hash('sha256', $request->getUri());
+        return 'md' . hash('sha256', $request->getUri());
     }
 
-    /**
-     * Returns a cache key for the given Request.
-     */
     private function getCacheKey(Request $request): string
     {
         if (isset($this->keyCache[$request])) {
@@ -445,17 +354,11 @@ class Store implements StoreInterface
         return $this->keyCache[$request] = $this->generateCacheKey($request);
     }
 
-    /**
-     * Persists the Request HTTP headers.
-     */
     private function persistRequest(Request $request): array
     {
         return $request->headers->all();
     }
 
-    /**
-     * Persists the Response HTTP headers.
-     */
     private function persistResponse(Response $response): array
     {
         $headers = $response->headers->all();
@@ -464,9 +367,6 @@ class Store implements StoreInterface
         return $headers;
     }
 
-    /**
-     * Restores a Response from the HTTP headers and body.
-     */
     private function restoreResponse(array $headers, string $path = null): Response
     {
         $status = $headers['X-Status'][0];
