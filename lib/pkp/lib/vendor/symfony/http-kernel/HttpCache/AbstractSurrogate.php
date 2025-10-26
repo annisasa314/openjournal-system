@@ -18,9 +18,8 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 /**
  * Abstract class implementing Surrogate capabilities to Request and Response instances.
  *
- * Securely patched to prevent Path Traversal, SSRF, XSS, and Code Injection.
- *
- * @author 
+ * @author Fabien Potencier <fabien@symfony.com>
+ * @author Robin Chalas <robin.chalas@gmail.com>
  */
 abstract class AbstractSurrogate implements SurrogateInterface
 {
@@ -30,16 +29,26 @@ abstract class AbstractSurrogate implements SurrogateInterface
         ['<?php echo "<?"; ?>', '<?php echo "<%"; ?>', '<?php echo "<s"; ?>', '<?php echo "<S"; ?>'],
     ];
 
+    /**
+     * @param array $contentTypes An array of content-type that should be parsed for Surrogate information
+     *                            (default: text/html, text/xml, application/xhtml+xml, and application/xml)
+     */
     public function __construct(array $contentTypes = ['text/html', 'text/xml', 'application/xhtml+xml', 'application/xml'])
     {
         $this->contentTypes = $contentTypes;
     }
 
+    /**
+     * Returns a new cache strategy instance.
+     */
     public function createCacheStrategy(): ResponseCacheStrategyInterface
     {
         return new ResponseCacheStrategy();
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function hasSurrogateCapability(Request $request): bool
     {
         if (null === $value = $request->headers->get('Surrogate-Capability')) {
@@ -49,14 +58,20 @@ abstract class AbstractSurrogate implements SurrogateInterface
         return str_contains($value, sprintf('%s/1.0', strtoupper($this->getName())));
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function addSurrogateCapability(Request $request)
     {
         $current = $request->headers->get('Surrogate-Capability');
         $new = sprintf('symfony="%s/1.0"', strtoupper($this->getName()));
 
-        $request->headers->set('Surrogate-Capability', $current ? $current . ', ' . $new : $new);
+        $request->headers->set('Surrogate-Capability', $current ? $current.', '.$new : $new);
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function needsParsing(Response $response): bool
     {
         if (!$control = $response->headers->get('Surrogate-Control')) {
@@ -64,50 +79,41 @@ abstract class AbstractSurrogate implements SurrogateInterface
         }
 
         $pattern = sprintf('#content="[^"]*%s/1.0[^"]*"#', strtoupper($this->getName()));
+
         return (bool) preg_match($pattern, $control);
     }
 
     /**
-     * Securely handle sub-requests through Surrogate.
-     *
-     * All URIs are strictly sanitized and validated.
+     * {@inheritdoc}
      */
     public function handle(HttpCache $cache, string $uri, string $alt, bool $ignoreErrors): string
     {
-        // ✅ Sanitize URI input to prevent path traversal and SSRF
-        $safeUri = $this->sanitizeUri($uri);
-        $safeAlt = $this->sanitizeUri($alt);
-
-        if (!$safeUri) {
-            if ($safeAlt) {
-                return $this->handle($cache, $safeAlt, '', $ignoreErrors);
+        // Validate and sanitize the URI to prevent path traversal
+        if (!$this->isValidUri($uri)) {
+            if ($alt && $this->isValidUri($alt)) {
+                return $this->handle($cache, $alt, '', $ignoreErrors);
             }
+            
             if (!$ignoreErrors) {
-                throw new \RuntimeException(sprintf('Invalid or unsafe URI: "%s"', htmlspecialchars($uri, ENT_QUOTES, 'UTF-8')));
+                throw new \RuntimeException(sprintf('Invalid URI: "%s"', $uri));
             }
+            
             return '';
         }
 
-        // Create a new internal sub-request only for safe, local URIs
-        $subRequest = Request::create($safeUri, Request::METHOD_GET, [], $cache->getRequest()->cookies->all(), [], $cache->getRequest()->server->all());
+        $subRequest = Request::create($uri, Request::METHOD_GET, [], $cache->getRequest()->cookies->all(), [], $cache->getRequest()->server->all());
 
         try {
             $response = $cache->handle($subRequest, HttpKernelInterface::SUB_REQUEST, true);
 
             if (!$response->isSuccessful() && Response::HTTP_NOT_MODIFIED !== $response->getStatusCode()) {
-                throw new \RuntimeException(
-                    sprintf('Error rendering "%s" (Status code %d).', htmlspecialchars($subRequest->getUri(), ENT_QUOTES, 'UTF-8'), $response->getStatusCode())
-                );
+                throw new \RuntimeException(sprintf('Error when rendering "%s" (Status code is %d).', $subRequest->getUri(), $response->getStatusCode()));
             }
 
-            // ✅ Sanitize response content before returning to prevent XSS
-            $content = (string) $response->getContent();
-            $safeContent = $this->sanitizeOutput($content);
-
-            return $safeContent;
+            return $response->getContent();
         } catch (\Exception $e) {
-            if ($safeAlt) {
-                return $this->handle($cache, $safeAlt, '', $ignoreErrors);
+            if ($alt && $this->isValidUri($alt)) {
+                return $this->handle($cache, $alt, '', $ignoreErrors);
             }
 
             if (!$ignoreErrors) {
@@ -119,59 +125,44 @@ abstract class AbstractSurrogate implements SurrogateInterface
     }
 
     /**
-     * ✅ Sanitize and validate URI to prevent traversal, SSRF, and RFI
+     * Validates that a URI is safe and doesn't contain path traversal attempts.
      */
-    private function sanitizeUri(?string $uri): ?string
+    private function isValidUri(string $uri): bool
     {
+        // Reject empty URIs
         if (empty($uri)) {
-            return null;
+            return false;
         }
 
-        // Disallow dangerous PHP wrappers
-        $forbidden = ['php://', 'file://', 'data://', 'expect://', 'zip://'];
-        foreach ($forbidden as $wrapper) {
-            if (stripos($uri, $wrapper) === 0) {
-                return null;
+        // Parse the URI to check for path traversal attempts
+        $parsed = parse_url($uri);
+        
+        // If there's a path component, check for path traversal patterns
+        if (isset($parsed['path'])) {
+            $path = $parsed['path'];
+            
+            // Check for directory traversal patterns
+            if (str_contains($path, '../') || str_contains($path, '..\\')) {
+                return false;
+            }
+            
+            // Check for absolute paths or protocol-relative paths
+            if (str_starts_with($path, '/') || str_starts_with($path, '\\')) {
+                return false;
+            }
+            
+            // Check for dangerous protocols
+            if (isset($parsed['scheme']) && !in_array(strtolower($parsed['scheme']), ['http', 'https'])) {
+                return false;
             }
         }
-
-        $parsed = parse_url($uri);
-        if ($parsed === false) {
-            return null;
+        
+        // Additional security: ensure the URI doesn't contain null bytes or other dangerous characters
+        if (str_contains($uri, "\0") || str_contains($uri, "%00")) {
+            return false;
         }
 
-        // Allow only HTTP(S) same-host URIs or relative paths
-        if (isset($parsed['scheme']) && !in_array(strtolower($parsed['scheme']), ['http', 'https'], true)) {
-            return null;
-        }
-
-        // Prevent SSRF by disallowing full URLs pointing to external hosts
-        if (isset($parsed['host']) && $parsed['host'] !== $_SERVER['HTTP_HOST']) {
-            return null;
-        }
-
-        // Disallow traversal attempts
-        if (isset($parsed['path']) && (str_contains($parsed['path'], '../') || str_contains($parsed['path'], '..\\'))) {
-            return null;
-        }
-
-        // Ensure no null bytes
-        if (str_contains($uri, "\0") || str_contains($uri, '%00')) {
-            return null;
-        }
-
-        // Normalize the URI safely
-        return htmlspecialchars($uri, ENT_QUOTES, 'UTF-8');
-    }
-
-    /**
-     * ✅ Output sanitizer to prevent XSS in surrogate-injected content.
-     */
-    private function sanitizeOutput(string $content): string
-    {
-        // If output might contain raw HTML, we can HTML-escape it
-        // You can adjust depending on how surrogates are used.
-        return preg_replace_callback('/<script\b[^>]*>(.*?)<\/script>/is', fn() => '', $content);
+        return true;
     }
 
     /**
@@ -186,18 +177,12 @@ abstract class AbstractSurrogate implements SurrogateInterface
         $value = $response->headers->get('Surrogate-Control');
         $upperName = strtoupper($this->getName());
 
-        if (sprintf('content="%s/1.0"', $upperName) === $value) {
+        if (sprintf('content="%s/1.0"', $upperName) == $value) {
             $response->headers->remove('Surrogate-Control');
         } elseif (preg_match(sprintf('#,\s*content="%s/1.0"#', $upperName), $value)) {
-            $response->headers->set(
-                'Surrogate-Control',
-                preg_replace(sprintf('#,\s*content="%s/1.0"#', $upperName), '', $value)
-            );
+            $response->headers->set('Surrogate-Control', preg_replace(sprintf('#,\s*content="%s/1.0"#', $upperName), '', $value));
         } elseif (preg_match(sprintf('#content="%s/1.0",\s*#', $upperName), $value)) {
-            $response->headers->set(
-                'Surrogate-Control',
-                preg_replace(sprintf('#content="%s/1.0",\s*#', $upperName), '', $value)
-            );
+            $response->headers->set('Surrogate-Control', preg_replace(sprintf('#content="%s/1.0",\s*#', $upperName), '', $value));
         }
     }
 }
